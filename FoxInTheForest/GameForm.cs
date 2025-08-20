@@ -145,6 +145,49 @@ namespace FoxInTheForest
             this.Controls.Add(playedCardPictureBox);
             playedCardPictureBox.BringToFront();
 
+            // Add a label above the table
+            Label pointsTableTitle = new Label();
+            pointsTableTitle.Text = "Both players get points at the end of the round based on the amount of fights won.";
+            pointsTableTitle.Location = new System.Drawing.Point(475, 100);
+            pointsTableTitle.Size = new System.Drawing.Size(275, 30);
+            pointsTableTitle.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            pointsTableTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
+            pointsTableTitle.AutoEllipsis = true;
+            this.Controls.Add(pointsTableTitle);
+
+            // Add a static table using TableLayoutPanel
+            TableLayoutPanel pointsTable = new TableLayoutPanel();
+            pointsTable.Location = new System.Drawing.Point(475, 130);
+            pointsTable.Size = new System.Drawing.Size(275, 223);
+            pointsTable.ColumnCount = 2;
+            pointsTable.RowCount = 7;
+            pointsTable.CellBorderStyle = TableLayoutPanelCellBorderStyle.Single;
+            pointsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60F));
+            pointsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
+            pointsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+            for (int i = 1; i < 7; i++) pointsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+            pointsTable.Font = new Font("Segoe UI", 12F);
+
+            // Header
+            pointsTable.Controls.Add(new Label() { Text = "Fights", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill, Font = new Font("Segoe UI", 12F, FontStyle.Bold) }, 0, 0);
+            pointsTable.Controls.Add(new Label() { Text = "Points", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill, Font = new Font("Segoe UI", 12F, FontStyle.Bold) }, 1, 0);
+            // Rows
+            pointsTable.Controls.Add(new Label() { Text = "0-3", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 0, 1);
+            pointsTable.Controls.Add(new Label() { Text = "6", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 1, 1);
+            pointsTable.Controls.Add(new Label() { Text = "4", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 0, 2);
+            pointsTable.Controls.Add(new Label() { Text = "1", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 1, 2);
+            pointsTable.Controls.Add(new Label() { Text = "5", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 0, 3);
+            pointsTable.Controls.Add(new Label() { Text = "2", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 1, 3);
+            pointsTable.Controls.Add(new Label() { Text = "6", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 0, 4);
+            pointsTable.Controls.Add(new Label() { Text = "3", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 1, 4);
+            pointsTable.Controls.Add(new Label() { Text = "7-9", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 0, 5);
+            pointsTable.Controls.Add(new Label() { Text = "6", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 1, 5);
+            pointsTable.Controls.Add(new Label() { Text = "10-13", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 0, 6);
+            pointsTable.Controls.Add(new Label() { Text = "0", TextAlign = System.Drawing.ContentAlignment.MiddleCenter, Dock = DockStyle.Fill }, 1, 6);
+
+            this.Controls.Add(pointsTable);
+
+
             // Show the hand
             DisplayHand(player1Hand, player1ListBox);
         }
