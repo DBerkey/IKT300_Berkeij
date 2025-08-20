@@ -37,6 +37,9 @@ namespace FoxInTheForest
         private int player2Points = 0;
         private string playedCard = "";
         private string currentDecree = "";
+        private string moonPicturePath = System.IO.Path.GetFullPath("moon.png");
+        private string keyPicturePath = System.IO.Path.GetFullPath("key.png");
+        private string bellPicturePath = System.IO.Path.GetFullPath("bell.png");
 
         public GameForm(int winThreshold)
         {
@@ -48,6 +51,8 @@ namespace FoxInTheForest
         private ListBox? player1ListBox;
         private Label? cardInfoLabel;
         private Button? playCardButton;
+        private Label? playedCardLabel;
+        private PictureBox? playedCardPictureBox;
 
         private void InitializeComponent()
         {
@@ -120,9 +125,8 @@ namespace FoxInTheForest
             currentPlayerLabel.Text = $"Current Player: {currentPlayer}";
 
             this.Controls.Add(currentPlayerLabel);
-
             // --- Played card ---
-            Label playedCardLabel = new Label();
+            playedCardLabel = new Label();
             playedCardLabel.Location = new System.Drawing.Point(275, 100);
             playedCardLabel.Size = new System.Drawing.Size(175, 253);
             playedCardLabel.Font = new Font("Segoe UI", 12F);
@@ -131,57 +135,125 @@ namespace FoxInTheForest
 
             this.Controls.Add(playedCardLabel);
 
+
+            playedCardPictureBox = new PictureBox();
+            playedCardPictureBox.Location = new System.Drawing.Point(288, 150);
+            playedCardPictureBox.Size = new System.Drawing.Size(150, 150);
+            playedCardPictureBox.BorderStyle = BorderStyle.None;
+            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+
+            this.Controls.Add(playedCardPictureBox);
+            playedCardPictureBox.BringToFront();
+
             // Show the hand
             DisplayHand(player1Hand, player1ListBox);
         }
 
         private void Player1ListBox_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (player1ListBox.SelectedIndex >= 0)
+            if (player1ListBox != null && player1ListBox.SelectedIndex >= 0)
             {
                 Card selectedCard = player1Hand[player1ListBox.SelectedIndex];
                 if (selectedCard.Value % 2 == 1) // special cards: 1,3,5,7,9,11
                 {
                     if (selectedCard.Value == 1)
                     {
-                        cardInfoLabel.Text = $"Special card: {selectedCard}. This is the Swan, when this card is played and you lose the fight you will start the next one.";
+                        if (cardInfoLabel != null)
+                            cardInfoLabel.Text = $"Special card: {selectedCard}. This is the Swan, when this card is played and you lose the fight you will start the next one.";
                     }
                     else if (selectedCard.Value == 3)
                     {
-                        cardInfoLabel.Text = $"Special card: {selectedCard}. This is the Fox, when this card is played you may swap the decree card with one from your hand.";
+                        if (cardInfoLabel != null)
+                            cardInfoLabel.Text = $"Special card: {selectedCard}. This is the Fox, when this card is played you may swap the decree card with one from your hand.";
                     }
                     else if (selectedCard.Value == 5)
                     {
-                        cardInfoLabel.Text = $"Special card: {selectedCard}. This is the woodcutter, when this card is played you draw a card from the draw pile and afterwards you remove a card from your hand.";
+                        if (cardInfoLabel != null)
+                            cardInfoLabel.Text = $"Special card: {selectedCard}. This is the woodcutter, when this card is played you draw a card from the draw pile and afterwards you remove a card from your hand.";
                     }
                     else if (selectedCard.Value == 7)
                     {
-                        cardInfoLabel.Text = $"Special card: {selectedCard}. This is the treasure, the winner of this fight get an extra point for every 7 played.";
+                        if (cardInfoLabel != null)
+                            cardInfoLabel.Text = $"Special card: {selectedCard}. This is the treasure, the winner of this fight get an extra point for every 7 played.";
                     }
                     else if (selectedCard.Value == 9)
                     {
-                        cardInfoLabel.Text = $"Special card: {selectedCard}. This is the witch, if the fight contains only one witch this card will work as the symbol of the decree card.";
+                        if (cardInfoLabel != null)
+                            cardInfoLabel.Text = $"Special card: {selectedCard}. This is the witch, if the fight contains only one witch this card will work as the symbol of the decree card.";
                     }
                     else if (selectedCard.Value == 11)
                     {
-                        cardInfoLabel.Text = $"Special card: {selectedCard}. This is the king, when this card is played the opponent needs to play their corresponding 1 or highest corresponding card.";
+                        if (cardInfoLabel != null)
+                            cardInfoLabel.Text = $"Special card: {selectedCard}. This is the king, when this card is played the opponent needs to play their corresponding 1 or highest corresponding card.";
                     }
                 }
                 else
                 {
-                    cardInfoLabel.Text = $"Normal card: {selectedCard}.";
+                    if (cardInfoLabel != null)
+                        cardInfoLabel.Text = $"Normal card: {selectedCard}.";
                 }
             }
         }
 
         private void PlayCardButton_Click(object? sender, EventArgs e)
         {
-            if (player1ListBox.SelectedIndex >= 0)
+            if (player1ListBox != null && player1ListBox.SelectedIndex >= 0)
             {
                 Card selectedCard = player1Hand[player1ListBox.SelectedIndex];
                 playedCard = selectedCard.ToString();
                 player1Hand.RemoveAt(player1ListBox.SelectedIndex);
                 DisplayHand(player1Hand, player1ListBox);
+
+                if (playedCardLabel.Text == "No Card Played")
+                {
+                    playedCardLabel.Text = $"Played Card: {playedCard}";
+
+                    if (playedCard.StartsWith("Bell"))
+                    {
+                        if (!System.IO.File.Exists(bellPicturePath))
+                        {
+                            MessageBox.Show($"Image not found: {bellPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        else
+                        {
+                            playedCardPictureBox.ImageLocation = bellPicturePath;
+                            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                            playedCardPictureBox.Update();
+                        }
+                    }
+                    else if (playedCard.StartsWith("Key"))
+                    {
+                        if (!System.IO.File.Exists(keyPicturePath))
+                        {
+                            MessageBox.Show($"Image not found: {keyPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        else
+                        {
+                            playedCardPictureBox.ImageLocation = keyPicturePath;
+                            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                            playedCardPictureBox.Update();
+                        }
+                    }
+                    else if (playedCard.StartsWith("Moon"))
+                    {
+                        if (!System.IO.File.Exists(moonPicturePath))
+                        {
+                            MessageBox.Show($"Image not found: {moonPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        else
+                        {
+                            playedCardPictureBox.ImageLocation = moonPicturePath;
+                            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                            playedCardPictureBox.Update();
+                        }
+                    }
+                    else
+                    {
+                        playedCardPictureBox.Image = null; // Clear the image if it's a normal card
+                        playedCardPictureBox.Update();
+                    }
+
+                }
             }
         }
 
