@@ -676,17 +676,53 @@ namespace FoxInTheForest
             // Highlight playable cards if this is the second card of a fight
             bool highlightPlayable = pendingFightCard != null && hand.Count > 0;
             CardSuit? mustFollowSuit = null;
+            bool kingEffect = false;
             if (highlightPlayable && pendingFightCard != null)
             {
                 mustFollowSuit = pendingFightCard.Suit;
+                kingEffect = pendingFightCard.Value == 11;
             }
-            foreach (Card card in hand)
+            List<int> highlightIndexes = new List<int>();
+            if (highlightPlayable && mustFollowSuit != null)
             {
-                string display = card.ToString();
-                if (mustFollowSuit != null && card.Suit == mustFollowSuit)
+                if (kingEffect)
                 {
-                    display = "* " + display + " *"; // highlight with asterisks
+                    var suitCards = hand.Where(c => c.Suit == mustFollowSuit).ToList();
+                    if (suitCards.Count > 0)
+                    {
+                        int maxValue = suitCards.Max(c => c.Value);
+                        for (int i = 0; i < hand.Count; i++)
+                        {
+                            var c = hand[i];
+                            if (c.Suit == mustFollowSuit && (c.Value == 1 || c.Value == maxValue))
+                                highlightIndexes.Add(i);
+                        }
+                    }
+                    else
+                    {
+                        int maxValue = hand.Max(c => c.Value);
+                        for (int i = 0; i < hand.Count; i++)
+                        {
+                            var c = hand[i];
+                            if (c.Value == 1 || c.Value == maxValue)
+                                highlightIndexes.Add(i);
+                        }
+                    }
                 }
+                else
+                {
+                    for (int i = 0; i < hand.Count; i++)
+                    {
+                        if (hand[i].Suit == mustFollowSuit)
+                            highlightIndexes.Add(i);
+                    }
+                }
+            }
+            for (int i = 0; i < hand.Count; i++)
+            {
+                string display = hand[i].ToString();
+                if (highlightIndexes.Contains(i))
+                    display = "* " + display + " *";
                 listBox.Items.Add(display);
             }
         }
