@@ -29,21 +29,51 @@ namespace FoxInTheForest
             return DisplayName;
         }
     }
+    
     public partial class GameForm : Form
     {
         private int winThreshold;
-        private int currentPlayer = 1;
-        private int player1Points = 0;
-        private int player2Points = 0;
-        private string playedCard = "";
-        private string currentDecree = "";
+        private int currentPlayer;
+        private int player1Points;
+        private int player2Points;
+    private string playedCard = "";
+    private string? lastPlayedCard;
+    private string? lastPlayedCardImagePath;
+        private string currentDecree;
         private string moonPicturePath = System.IO.Path.GetFullPath("moon.png");
         private string keyPicturePath = System.IO.Path.GetFullPath("key.png");
         private string bellPicturePath = System.IO.Path.GetFullPath("bell.png");
+        private List<Card> player1Hand;
+        private List<Card> player2Hand;
+        private List<Card> drawPile;
 
-        public GameForm(int winThreshold)
+        public GameForm(
+            int winThreshold,
+            int playerNumber = 1,
+            List<Card>? player1Hand = null,
+            List<Card>? player2Hand = null,
+            List<Card>? drawPile = null,
+            int player1Points = 0,
+            int player2Points = 0,
+            string? currentDecree = null,
+            string? lastPlayedCard = null,
+            string? lastPlayedCardImagePath = null
+        )
         {
             this.winThreshold = winThreshold;
+            this.currentPlayer = playerNumber;
+            this.player1Points = player1Points;
+            this.player2Points = player2Points;
+            this.currentDecree = currentDecree ?? "";
+            this.player1Hand = player1Hand ?? new List<Card>();
+            this.player2Hand = player2Hand ?? new List<Card>();
+            this.drawPile = drawPile ?? new List<Card>();
+            this.lastPlayedCard = lastPlayedCard;
+            this.lastPlayedCardImagePath = lastPlayedCardImagePath;
+            if (this.player1Hand.Count == 0 || this.player2Hand.Count == 0 || this.drawPile.Count == 0)
+            {
+                ShuffleCards();
+            }
             InitializeComponent();
             this.FormClosing += GameForm_FormClosing;
         }
@@ -53,6 +83,42 @@ namespace FoxInTheForest
         private Button? playCardButton;
         private Label? playedCardLabel;
         private PictureBox? playedCardPictureBox;
+
+        private void ShowSwapPlayerScreenAndSwitch(int nextPlayerNumber)
+        {
+            using (var swapForm = new SwapPlayerForm())
+            {
+                if (swapForm.ShowDialog() == DialogResult.OK)
+                {
+                    // Determine the image path for the played card
+                    string? imagePath = null;
+                    if (!string.IsNullOrEmpty(playedCard))
+                    {
+                        if (playedCard.StartsWith("Bell"))
+                            imagePath = bellPicturePath;
+                        else if (playedCard.StartsWith("Key"))
+                            imagePath = keyPicturePath;
+                        else if (playedCard.StartsWith("Moon"))
+                            imagePath = moonPicturePath;
+                    }
+                    var nextForm = new GameForm(
+                        winThreshold,
+                        nextPlayerNumber,
+                        new List<Card>(player1Hand),
+                        new List<Card>(player2Hand),
+                        new List<Card>(drawPile),
+                        player1Points,
+                        player2Points,
+                        currentDecree,
+                        playedCard, // pass the last played card text
+                        imagePath // pass the last played card image path
+                    );
+                    this.Hide();
+                    nextForm.ShowDialog();
+                    this.Close();
+                }
+            }
+        }
 
         private void InitializeComponent()
         {
@@ -65,7 +131,10 @@ namespace FoxInTheForest
             info.Size = new System.Drawing.Size(400, 30);
             info.Font = new Font("Segoe UI", 12F);
 
-            ShuffleCards();
+            if (player1Hand.Count == 0 || player2Hand.Count == 0 || drawPile.Count == 0)
+            {
+                ShuffleCards();
+            }
 
             // --- Add ListBox for Player 1 ---
             player1ListBox = new ListBox();
@@ -131,16 +200,30 @@ namespace FoxInTheForest
             playedCardLabel.Size = new System.Drawing.Size(175, 253);
             playedCardLabel.Font = new Font("Segoe UI", 12F);
             playedCardLabel.BorderStyle = BorderStyle.FixedSingle;
-            playedCardLabel.Text = $"No Card Played";
+            if (!string.IsNullOrEmpty(lastPlayedCard))
+                playedCardLabel.Text = $"Played Card: {lastPlayedCard}";
+            else
+                playedCardLabel.Text = $"No Card Played";
 
             this.Controls.Add(playedCardLabel);
-
 
             playedCardPictureBox = new PictureBox();
             playedCardPictureBox.Location = new System.Drawing.Point(288, 150);
             playedCardPictureBox.Size = new System.Drawing.Size(150, 150);
             playedCardPictureBox.BorderStyle = BorderStyle.None;
             playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+
+            // Show last played card image if available
+            if (!string.IsNullOrEmpty(lastPlayedCardImagePath) && System.IO.File.Exists(lastPlayedCardImagePath))
+            {
+                playedCardPictureBox.ImageLocation = lastPlayedCardImagePath;
+                playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                playedCardPictureBox.Update();
+            }
+            else
+            {
+                playedCardPictureBox.Image = null;
+            }
 
             this.Controls.Add(playedCardPictureBox);
             playedCardPictureBox.BringToFront();
@@ -188,15 +271,16 @@ namespace FoxInTheForest
             this.Controls.Add(pointsTable);
 
 
-            // Show the hand
-            DisplayHand(player1Hand, player1ListBox);
+            // Show the hand for the current player
+            DisplayHand(currentPlayer == 1 ? player1Hand : player2Hand, player1ListBox);
         }
 
         private void Player1ListBox_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (player1ListBox != null && player1ListBox.SelectedIndex >= 0)
             {
-                Card selectedCard = player1Hand[player1ListBox.SelectedIndex];
+                var hand = currentPlayer == 1 ? player1Hand : player2Hand;
+                Card selectedCard = hand[player1ListBox.SelectedIndex];
                 if (selectedCard.Value % 2 == 1) // special cards: 1,3,5,7,9,11
                 {
                     if (selectedCard.Value == 1)
@@ -242,61 +326,67 @@ namespace FoxInTheForest
         {
             if (player1ListBox != null && player1ListBox.SelectedIndex >= 0)
             {
-                Card selectedCard = player1Hand[player1ListBox.SelectedIndex];
+                var hand = currentPlayer == 1 ? player1Hand : player2Hand;
+                Card selectedCard = hand[player1ListBox.SelectedIndex];
                 playedCard = selectedCard.ToString();
-                player1Hand.RemoveAt(player1ListBox.SelectedIndex);
-                DisplayHand(player1Hand, player1ListBox);
+                hand.RemoveAt(player1ListBox.SelectedIndex);
+                DisplayHand(hand, player1ListBox);
 
-                if (playedCardLabel.Text == "No Card Played")
+                if (playedCardLabel != null && playedCardLabel.Text == "No Card Played")
                 {
                     playedCardLabel.Text = $"Played Card: {playedCard}";
 
-                    if (playedCard.StartsWith("Bell"))
+                    if (playedCardPictureBox != null)
                     {
-                        if (!System.IO.File.Exists(bellPicturePath))
+                        if (playedCard.StartsWith("Bell"))
                         {
-                            MessageBox.Show($"Image not found: {bellPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            if (!System.IO.File.Exists(bellPicturePath))
+                            {
+                                MessageBox.Show($"Image not found: {bellPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                            else
+                            {
+                                playedCardPictureBox.ImageLocation = bellPicturePath;
+                                playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                                playedCardPictureBox.Update();
+                            }
+                        }
+                        else if (playedCard.StartsWith("Key"))
+                        {
+                            if (!System.IO.File.Exists(keyPicturePath))
+                            {
+                                MessageBox.Show($"Image not found: {keyPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                            else
+                            {
+                                playedCardPictureBox.ImageLocation = keyPicturePath;
+                                playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                                playedCardPictureBox.Update();
+                            }
+                        }
+                        else if (playedCard.StartsWith("Moon"))
+                        {
+                            if (!System.IO.File.Exists(moonPicturePath))
+                            {
+                                MessageBox.Show($"Image not found: {moonPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            }
+                            else
+                            {
+                                playedCardPictureBox.ImageLocation = moonPicturePath;
+                                playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                                playedCardPictureBox.Update();
+                            }
                         }
                         else
                         {
-                            playedCardPictureBox.ImageLocation = bellPicturePath;
-                            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
+                            playedCardPictureBox.Image = null; // Clear the image if it's a normal card
                             playedCardPictureBox.Update();
                         }
                     }
-                    else if (playedCard.StartsWith("Key"))
-                    {
-                        if (!System.IO.File.Exists(keyPicturePath))
-                        {
-                            MessageBox.Show($"Image not found: {keyPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
-                        else
-                        {
-                            playedCardPictureBox.ImageLocation = keyPicturePath;
-                            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
-                            playedCardPictureBox.Update();
-                        }
-                    }
-                    else if (playedCard.StartsWith("Moon"))
-                    {
-                        if (!System.IO.File.Exists(moonPicturePath))
-                        {
-                            MessageBox.Show($"Image not found: {moonPicturePath}", "Image Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
-                        else
-                        {
-                            playedCardPictureBox.ImageLocation = moonPicturePath;
-                            playedCardPictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
-                            playedCardPictureBox.Update();
-                        }
-                    }
-                    else
-                    {
-                        playedCardPictureBox.Image = null; // Clear the image if it's a normal card
-                        playedCardPictureBox.Update();
-                    }
-
                 }
+                int nextPlayer = (currentPlayer == 1) ? 2 : 1;
+                this.Hide();
+                ShowSwapPlayerScreenAndSwitch(nextPlayer);
             }
         }
 
@@ -309,10 +399,6 @@ namespace FoxInTheForest
             }
         }
 
-
-        private List<Card> player1Hand = new List<Card>();
-        private List<Card> player2Hand = new List<Card>();
-        private List<Card> drawPile = new List<Card>();
         private Random rng = new Random();
 
         private void ShuffleCards()
