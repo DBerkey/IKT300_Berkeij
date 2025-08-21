@@ -368,6 +368,47 @@ namespace FoxInTheForest
             {
                 var hand = currentPlayer == 1 ? player1Hand : player2Hand;
                 Card selectedCard = hand[player1ListBox.SelectedIndex];
+                // --- Enforce following suit for second player in a fight ---
+                if (pendingFightCard != null)
+                {
+                    CardSuit mustFollowSuit = pendingFightCard.Suit;
+                    bool hasSuit = hand.Exists(c => c.Suit == mustFollowSuit);
+                    // --- King (11) effect enforcement ---
+                    bool kingEffect = pendingFightCard.Value == 11;
+                    if (kingEffect)
+                    {
+                        if (hasSuit)
+                        {
+                            // Must play 1 or highest of the required suit
+                            var suitCards = hand.Where(c => c.Suit == mustFollowSuit).ToList();
+                            int maxValue = suitCards.Max(c => c.Value);
+                            bool isOne = selectedCard.Value == 1 && selectedCard.Suit == mustFollowSuit;
+                            bool isHighest = selectedCard.Value == maxValue && selectedCard.Suit == mustFollowSuit;
+                            if (!isOne && !isHighest)
+                            {
+                                MessageBox.Show($"King effect: You must play the 1 or the highest {mustFollowSuit} card!", "Invalid Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            // No card of the required suit: must play highest card in hand (any suit) or any card if multiple highest
+                            int maxValue = hand.Max(c => c.Value);
+                            bool isHighest = selectedCard.Value == maxValue;
+                            if (!isHighest)
+                            {
+                                MessageBox.Show($"King effect: You must play your highest card!", "Invalid Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                                return;
+                            }
+                        }
+                    }
+                    // Normal suit-following enforcement
+                    if (!kingEffect && hasSuit && selectedCard.Suit != mustFollowSuit)
+                    {
+                        MessageBox.Show($"You must play a {mustFollowSuit} card if you have one!", "Invalid Move", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+                }
                 hand.RemoveAt(player1ListBox.SelectedIndex);
                 DisplayHand(hand, player1ListBox);
 
@@ -469,53 +510,78 @@ namespace FoxInTheForest
                 }
                 else
                 {
+
                     // Second card played, resolve fight
-                    Card card1 = pendingFightPlayer == 1 ? pendingFightCard : selectedCard;
-                    Card card2 = pendingFightPlayer == 1 ? selectedCard : pendingFightCard;
-                    int player1 = pendingFightPlayer == 1 ? 1 : 2;
-                    int player2 = (player1 == 1) ? 2 : 1;
+                    Card cardA = pendingFightCard;
+                    Card cardB = selectedCard;
+                    int playerA = pendingFightPlayer ?? 1;
+                    int playerB = (playerA == 1) ? 2 : 1;
 
                     // --- Witch effect: If only one witch, it acts as decree suit ---
-                    bool card1Witch = card1.Value == 9;
-                    bool card2Witch = card2.Value == 9;
-                    CardSuit decreeSuit = Enum.TryParse<CardSuit>(currentDecree.Split(' ')[0], out var suit) ? suit : card1.Suit;
-                    bool card1Decree = card1.Suit == decreeSuit;
-                    bool card2Decree = card2.Suit == decreeSuit;
-                    if (card1Witch ^ card2Witch) // Only one witch
+                    bool cardAWitch = cardA.Value == 9;
+                    bool cardBWitch = cardB.Value == 9;
+                    CardSuit decreeSuit = Enum.TryParse<CardSuit>(currentDecree.Split(' ')[0], out var suit) ? suit : cardA.Suit;
+                    bool cardADecree = cardA.Suit == decreeSuit;
+                    bool cardBDecree = cardB.Suit == decreeSuit;
+                    if (cardAWitch ^ cardBWitch) // Only one witch
                     {
-                        if (card1Witch) card1Decree = true;
-                        if (card2Witch) card2Decree = true;
+                        if (cardAWitch) cardADecree = true;
+                        if (cardBWitch) cardBDecree = true;
                     }
 
                     // --- Fight winner logic ---
                     int winnerPlayer;
-                    if (card1Decree && card2Decree)
-                        winnerPlayer = (card1.Value >= card2.Value) ? player1 : player2;
-                    else if (card1Decree)
-                        winnerPlayer = player1;
-                    else if (card2Decree)
-                        winnerPlayer = player2;
+                    if (cardADecree && cardBDecree)
+                        winnerPlayer = (cardA.Value >= cardB.Value) ? playerA : playerB;
+                    else if (cardADecree)
+                        winnerPlayer = playerA;
+                    else if (cardBDecree)
+                        winnerPlayer = playerB;
+                    else if (cardA.Value == cardB.Value)
+                        winnerPlayer = playerA; 
                     else
-                        winnerPlayer = (card1.Value >= card2.Value) ? player1 : player2;
+                        winnerPlayer = (cardA.Value > cardB.Value) ? playerA : playerB;
 
                     if (winnerPlayer == 1)
                         player1FightPoints++;
                     else
                         player2FightPoints++;
 
+                    // --- Treasure (7) effect: Award 1 bonus point to fight winner if a 7 was played ---
+                    if (cardA.Value == 7 || cardB.Value == 7)
+                    {
+                        if (winnerPlayer == 1)
+                            player1Points++;
+                        else
+                            player2Points++;
+                        MessageBox.Show($"Treasure: Player {winnerPlayer} gets 1 bonus point for winning a fight with a 7!", "Treasure Effect");
+                    } else if (cardA.Value == 7 && cardB.Value == 7)
+                    {
+                        if (winnerPlayer == 1)
+                        {
+                            player1Points++;
+                            player1Points++;
+                        }
+                        else
+                        {
+                            player2Points++;
+                            player2Points++;
+                        }
+                        MessageBox.Show($"Treasure: Player {winnerPlayer} gets 2 bonus points for winning a fight with two 7s!", "Treasure Effect");
+                    }
+
                     // --- Swan effect: If loser played Swan, they start next fight ---
+                    int loserPlayer = (winnerPlayer == playerA) ? playerB : playerA;
                     int nextFightStarter = winnerPlayer;
-                    if (card1.Value == 1 && winnerPlayer != player1)
-                        nextFightStarter = player1;
-                    else if (card2.Value == 1 && winnerPlayer != player2)
-                        nextFightStarter = player2;
+                    if ((cardA.Value == 1 && loserPlayer == playerA) || (cardB.Value == 1 && loserPlayer == playerB))
+                        nextFightStarter = loserPlayer;
 
                     // Update fight points label
                     if (fightPointsLabel != null)
                         fightPointsLabel.Text = $"Fight Points: {player1FightPoints} - {player2FightPoints}";
 
                     // Show message BEFORE hiding the form
-                    MessageBox.Show($"Player {winnerPlayer} wins the fight!\n{card1} vs {card2}", "Fight Result");
+                    MessageBox.Show($"Player {winnerPlayer} wins the fight!\n{cardA} vs {cardB}", "Fight Result");
 
                     // Reset for next fight
                     pendingFightCard = null;
@@ -533,25 +599,9 @@ namespace FoxInTheForest
                         int p1Points = GetPointsForFights(p1Fights);
                         int p2Points = GetPointsForFights(p2Fights);
 
-                        // Add treasure (7) bonus to the player who won the round
-                        int p1Sevens = sevensPlayedByPlayer[0];
-                        int p2Sevens = sevensPlayedByPlayer[1];
-                        int bonus = p1Sevens + p2Sevens;
-                        string treasureMsg = "";
-                        if (p1Points > p2Points && bonus > 0)
-                        {
-                            player1Points += bonus;
-                            treasureMsg = $"\nTreasure: Player 1 gets {bonus} bonus point(s) for all 7s played this round!";
-                        }
-                        else if (p2Points > p1Points && bonus > 0)
-                        {
-                            player2Points += bonus;
-                            treasureMsg = $"\nTreasure: Player 2 gets {bonus} bonus point(s) for all 7s played this round!";
-                        }
-                        // If tie, no one gets bonus
-
                         player1Points += p1Points;
                         player2Points += p2Points;
+                        string treasureMsg = "";
 
                         string roundWinnerMsg = "";
                         if (p1Points > p2Points)
@@ -623,9 +673,21 @@ namespace FoxInTheForest
         private void DisplayHand(List<Card> hand, ListBox listBox)
         {
             listBox.Items.Clear();
+            // Highlight playable cards if this is the second card of a fight
+            bool highlightPlayable = pendingFightCard != null && hand.Count > 0;
+            CardSuit? mustFollowSuit = null;
+            if (highlightPlayable && pendingFightCard != null)
+            {
+                mustFollowSuit = pendingFightCard.Suit;
+            }
             foreach (Card card in hand)
             {
-                listBox.Items.Add(card.ToString());
+                string display = card.ToString();
+                if (mustFollowSuit != null && card.Suit == mustFollowSuit)
+                {
+                    display = "* " + display + " *"; // highlight with asterisks
+                }
+                listBox.Items.Add(display);
             }
         }
 
