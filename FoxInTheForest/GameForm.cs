@@ -80,12 +80,13 @@ namespace FoxInTheForest
             this.lastPlayedCardImagePath = lastPlayedCardImagePath;
             this.pendingFightCard = pendingFightCard;
             this.pendingFightPlayer = pendingFightPlayer;
-            if (this.player1Hand.Count == 0 || this.player2Hand.Count == 0 || this.drawPile.Count == 0)
+            // Only shuffle and deal if both hands are null (i.e., new round), not just empty
+            if (player1Hand == null && player2Hand == null)
             {
                 ShuffleCards();
             }
             InitializeComponent();
-            this.FormClosing += GameForm_FormClosing;
+            this.FormClosing += GameForm_FormClosing;                                               
         }
 
         private ListBox? player1ListBox;
@@ -153,7 +154,8 @@ namespace FoxInTheForest
             info.Size = new System.Drawing.Size(400, 30);
             info.Font = new Font("Segoe UI", 12F);
 
-            if (player1Hand.Count == 0 || player2Hand.Count == 0 || drawPile.Count == 0)
+            // Only shuffle and deal if both hands are null (i.e., new round), not just empty
+            if (player1Hand == null && player2Hand == null)
             {
                 ShuffleCards();
             }
@@ -431,11 +433,80 @@ namespace FoxInTheForest
                     if (playedCardLabel != null) playedCardLabel.Text = "No Card Played";
                     if (playedCardPictureBox != null) { playedCardPictureBox.Image = null; playedCardPictureBox.Update(); }
 
-                    // Next fight starts with winner
+                    // Check for end of round
+                    if (player1Hand.Count == 0 && player2Hand.Count == 0)
+                    {
+                        // Calculate round points using the table
+                        int p1Fights = player1FightPoints;
+                        int p2Fights = player2FightPoints;
+                        int p1Points = GetPointsForFights(p1Fights);
+                        int p2Points = GetPointsForFights(p2Fights);
+                        player1Points += p1Points;
+                        player2Points += p2Points;
+
+                        string roundWinnerMsg = "";
+                        if (p1Points > p2Points)
+                            roundWinnerMsg = "Player 1 wins the round!";
+                        else if (p2Points > p1Points)
+                            roundWinnerMsg = "Player 2 wins the round!";
+                        else
+                            roundWinnerMsg = "The round is a tie!";
+
+                        string msg = $"Round over!\nPlayer 1 fights: {p1Fights} (Points: {p1Points})\nPlayer 2 fights: {p2Fights} (Points: {p2Points})\nTotal: {player1Points} - {player2Points}\n{roundWinnerMsg}";
+                        MessageBox.Show(msg, "Round Result");
+
+                        // Check for game end
+                        bool player1Wins = player1Points >= winThreshold && player1Points > player2Points;
+                        bool player2Wins = player2Points >= winThreshold && player2Points > player1Points;
+                        if (player1Wins || player2Wins)
+                        {
+                            string winnerMsg = player1Wins ? "Player 1 wins the game!" : "Player 2 wins the game!";
+                            MessageBox.Show(winnerMsg + $"\nFinal Score: {player1Points} - {player2Points}", "Game Over");
+                            Application.Exit();
+                            return;
+                        }
+
+                        // Reset fight points for next round
+                        player1FightPoints = 0;
+                        player2FightPoints = 0;
+
+                        // Winner of the round starts next round (if tie, player 1 starts)
+                        int nextRoundStarter = 1;
+                        if (p2Points > p1Points) nextRoundStarter = 2;
+
+                        var nextForm = new GameForm(
+                            winThreshold,
+                            nextRoundStarter,
+                            null,
+                            null,
+                            null,
+                            player1Points,
+                            player2Points,
+                            0,
+                            0,
+                            null
+                        );
+                        this.Hide();
+                        nextForm.ShowDialog();
+                        this.Close();
+                        return;
+                    }
+                    // Next fight starts with winner (only if round did not end)
                     this.Hide();
                     ShowSwapPlayerScreenAndSwitch(winnerPlayer, null, null);
                 }
             }
+        }
+        // Returns points for a given number of fights won, based on the table
+        private int GetPointsForFights(int fights)
+        {
+            if (fights <= 3) return 6;
+            if (fights == 4) return 1;
+            if (fights == 5) return 2;
+            if (fights == 6) return 3;
+            if (fights >= 7 && fights <= 9) return 6;
+            if (fights >= 10 && fights <= 13) return 0;
+            return 0;
         }
 
         private void DisplayHand(List<Card> hand, ListBox listBox)
