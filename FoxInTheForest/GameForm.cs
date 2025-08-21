@@ -359,6 +359,9 @@ namespace FoxInTheForest
         private Card? pendingFightCard = null;
         private int? pendingFightPlayer = null;
 
+    // Track all 7s played in the round
+    private List<int> sevensPlayedByPlayer = new List<int> { 0, 0 }; // [0]=player1, [1]=player2
+
         private void PlayCardButton_Click(object? sender, EventArgs e)
         {
             if (player1ListBox != null && player1ListBox.SelectedIndex >= 0)
@@ -385,6 +388,78 @@ namespace FoxInTheForest
                     playedCardPictureBox.Update();
                 }
 
+                // --- Special Card Effects ---
+                // Swan (1): If you lose the fight, you start the next one
+                bool swanPlayed = selectedCard.Value == 1;
+                // Fox (3): Swap decree with a card from hand
+                bool foxPlayed = selectedCard.Value == 3;
+                // Woodcutter (5): Draw a card, then discard one
+                bool woodcutterPlayed = selectedCard.Value == 5;
+                // Treasure (7): Track for end-of-round bonus
+                bool treasurePlayed = selectedCard.Value == 7;
+                // Witch (9): If only one witch, it acts as decree suit
+                bool witchPlayed = selectedCard.Value == 9;
+                // King (11): Opponent must play 1 or highest of that suit (not enforced here, just info)
+                bool kingPlayed = selectedCard.Value == 11;
+
+                // Track 7s played for end-of-round bonus
+                if (treasurePlayed)
+                {
+                    if (currentPlayer == 1)
+                        sevensPlayedByPlayer[0]++;
+                    else
+                        sevensPlayedByPlayer[1]++;
+                }
+
+                // Fox: Allow decree swap
+                if (foxPlayed && hand.Count > 0)
+                {
+                    // Let player swap decree with a card from their hand
+                    var result = MessageBox.Show("Do you want to swap the decree card with a card from your hand?", "Fox Effect", MessageBoxButtons.YesNo);
+                    if (result == DialogResult.Yes)
+                    {
+                        // Let player pick a card to swap
+                        using (var selectForm = new SelectCardForm(hand, "Select a card to become the new decree."))
+                        {
+                            if (selectForm.ShowDialog() == DialogResult.OK && selectForm.SelectedCard != null)
+                            {
+                                // Swap decree
+                                Card oldDecree = null;
+                                if (!string.IsNullOrEmpty(currentDecree))
+                                {
+                                    var parts = currentDecree.Split(' ');
+                                    if (parts.Length == 2 && Enum.TryParse<CardSuit>(parts[0], out var suit) && int.TryParse(parts[1], out var val))
+                                        oldDecree = new Card(suit, val);
+                                }
+                                currentDecree = selectForm.SelectedCard.ToString();
+                                hand.Remove(selectForm.SelectedCard);
+                                if (oldDecree != null)
+                                    hand.Add(oldDecree);
+                                DisplayHand(hand, player1ListBox);
+                                MessageBox.Show($"Decree swapped! New decree: {currentDecree}", "Fox Effect");
+                            }
+                        }
+                    }
+                }
+
+                // Woodcutter: Draw a card, then discard one
+                if (woodcutterPlayed && drawPile.Count > 0)
+                {
+                    Card drawn = drawPile[0];
+                    drawPile.RemoveAt(0);
+                    hand.Add(drawn);
+                    DisplayHand(hand, player1ListBox);
+                    MessageBox.Show($"Woodcutter: You drew {drawn}. Now select a card to discard.", "Woodcutter Effect");
+                    using (var selectForm = new SelectCardForm(hand, "Select a card to discard."))
+                    {
+                        if (selectForm.ShowDialog() == DialogResult.OK && selectForm.SelectedCard != null)
+                        {
+                            hand.Remove(selectForm.SelectedCard);
+                            DisplayHand(hand, player1ListBox);
+                        }
+                    }
+                }
+
                 // Fight logic: if this is the first card of the fight, store it and swap
                 if (pendingFightCard == null)
                 {
@@ -400,10 +475,19 @@ namespace FoxInTheForest
                     int player1 = pendingFightPlayer == 1 ? 1 : 2;
                     int player2 = (player1 == 1) ? 2 : 1;
 
+                    // --- Witch effect: If only one witch, it acts as decree suit ---
+                    bool card1Witch = card1.Value == 9;
+                    bool card2Witch = card2.Value == 9;
                     CardSuit decreeSuit = Enum.TryParse<CardSuit>(currentDecree.Split(' ')[0], out var suit) ? suit : card1.Suit;
                     bool card1Decree = card1.Suit == decreeSuit;
                     bool card2Decree = card2.Suit == decreeSuit;
+                    if (card1Witch ^ card2Witch) // Only one witch
+                    {
+                        if (card1Witch) card1Decree = true;
+                        if (card2Witch) card2Decree = true;
+                    }
 
+                    // --- Fight winner logic ---
                     int winnerPlayer;
                     if (card1Decree && card2Decree)
                         winnerPlayer = (card1.Value >= card2.Value) ? player1 : player2;
@@ -418,6 +502,13 @@ namespace FoxInTheForest
                         player1FightPoints++;
                     else
                         player2FightPoints++;
+
+                    // --- Swan effect: If loser played Swan, they start next fight ---
+                    int nextFightStarter = winnerPlayer;
+                    if (card1.Value == 1 && winnerPlayer != player1)
+                        nextFightStarter = player1;
+                    else if (card2.Value == 1 && winnerPlayer != player2)
+                        nextFightStarter = player2;
 
                     // Update fight points label
                     if (fightPointsLabel != null)
@@ -441,6 +532,24 @@ namespace FoxInTheForest
                         int p2Fights = player2FightPoints;
                         int p1Points = GetPointsForFights(p1Fights);
                         int p2Points = GetPointsForFights(p2Fights);
+
+                        // Add treasure (7) bonus to the player who won the round
+                        int p1Sevens = sevensPlayedByPlayer[0];
+                        int p2Sevens = sevensPlayedByPlayer[1];
+                        int bonus = p1Sevens + p2Sevens;
+                        string treasureMsg = "";
+                        if (p1Points > p2Points && bonus > 0)
+                        {
+                            player1Points += bonus;
+                            treasureMsg = $"\nTreasure: Player 1 gets {bonus} bonus point(s) for all 7s played this round!";
+                        }
+                        else if (p2Points > p1Points && bonus > 0)
+                        {
+                            player2Points += bonus;
+                            treasureMsg = $"\nTreasure: Player 2 gets {bonus} bonus point(s) for all 7s played this round!";
+                        }
+                        // If tie, no one gets bonus
+
                         player1Points += p1Points;
                         player2Points += p2Points;
 
@@ -452,7 +561,7 @@ namespace FoxInTheForest
                         else
                             roundWinnerMsg = "The round is a tie!";
 
-                        string msg = $"Round over!\nPlayer 1 fights: {p1Fights} (Points: {p1Points})\nPlayer 2 fights: {p2Fights} (Points: {p2Points})\nTotal: {player1Points} - {player2Points}\n{roundWinnerMsg}";
+                        string msg = $"Round over!\nPlayer 1 fights: {p1Fights} (Points: {p1Points})\nPlayer 2 fights: {p2Fights} (Points: {p2Points})\nTotal: {player1Points} - {player2Points}{treasureMsg}\n{roundWinnerMsg}";
                         MessageBox.Show(msg, "Round Result");
 
                         // Check for game end
@@ -466,9 +575,11 @@ namespace FoxInTheForest
                             return;
                         }
 
-                        // Reset fight points for next round
+                        // Reset fight points and 7s for next round
                         player1FightPoints = 0;
                         player2FightPoints = 0;
+                        sevensPlayedByPlayer[0] = 0;
+                        sevensPlayedByPlayer[1] = 0;
 
                         // Winner of the round starts next round (if tie, player 1 starts)
                         int nextRoundStarter = 1;
@@ -491,9 +602,9 @@ namespace FoxInTheForest
                         this.Close();
                         return;
                     }
-                    // Next fight starts with winner (only if round did not end)
+                    // Next fight starts with winner (or Swan loser if played)
                     this.Hide();
-                    ShowSwapPlayerScreenAndSwitch(winnerPlayer, null, null);
+                    ShowSwapPlayerScreenAndSwitch(nextFightStarter, null, null);
                 }
             }
         }
