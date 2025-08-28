@@ -1,301 +1,153 @@
-namespace PS2000B;
-
 using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.IO.Ports;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
 
-static class Program
+namespace PS2000B
 {
-    /// <summary>
-    ///  The main entry point for the application.
-    /// </summary>
-    [STAThread]
-    static void Main()
+    internal static class Program
     {
-        // To customize application configuration such as set high DPI settings or default font,
-        // see https://aka.ms/applicationconfiguration.
-
-        string comPort = "COM7"; // Replace with your COM port
-        double voltage = getVoltage(comPort);
-        string serialNumber = getSerialNumber(comPort);
-        string deviceType = getDeviceType(comPort);
-        string articleNumber = getArticleNumber(comPort);
-
-        // console log of values
-        System.Windows.Forms.MessageBox.Show($"Voltage: {voltage}");
-        System.Windows.Forms.MessageBox.Show($"Serial Number: {serialNumber}");
-        System.Windows.Forms.MessageBox.Show($"Device Type: {deviceType}");
-        System.Windows.Forms.MessageBox.Show($"Article Number: {articleNumber}");
-
-        ApplicationConfiguration.Initialize();
-        Application.Run(new Form1(voltage, serialNumber, deviceType, articleNumber));
-        static double getVoltage(string comPort)
+        [STAThread]
+        static void Main()
         {
-            double volt = 0;
-            int percentVolt = 0;
+            string comPort = "COM7"; // adjust to your system
 
-            // get voltage
+            string devType = GetDeviceType(comPort);
+            string serial = GetSerialNumber(comPort);
+            string article = GetArticleNumber(comPort);
+            float nomV = GetNominalVoltage(comPort);
+            float nomP = GetNominalPower(comPort);
+            string manuf = GetManufacturer(comPort);
+            string sw = GetSoftwareVersion(comPort);
 
-            //SD = MessageType + CastType + Direction + Length
-            int SDHex = (int)0x40 + (int)0x20 + 0x10 + 5; //6-1 ref spec 3.1.1
-            byte SD = Convert.ToByte(SDHex.ToString(), 10);
-
-            //SD, DN, OBJ, DATA, CS
-            byte[] byteWithOutCheckSum = { SD, (int)0x00, (int)0x47, 0x0, 0x0 }; // quert status
-
-            int sum = 0;
-            int arrayLength = byteWithOutCheckSum.Length;
-            for (int i = 0; i < arrayLength; i++)
-            {
-                sum += byteWithOutCheckSum[i];
-            }
-
-            string hexSum = sum.ToString("X");
-            string cs1 = "";
-            string cs2 = "";
-            if (hexSum.Length == 4)
-            {
-                cs1 = hexSum.Substring(0, hexSum.Length / 2);
-                cs2 = hexSum.Substring(hexSum.Length / 2);
-            }
-            else if (hexSum.Length == 3)
-            {
-                cs1 = hexSum.Substring(0, 1);
-                cs2 = hexSum.Substring(1);
-            }
-            else if ((hexSum.Length is 2) || (hexSum.Length is 1))
-            {
-                cs1 = "0";
-                cs2 = hexSum;
-            }
-
-            if (cs1 != "")
-            {
-
-
-                byteWithOutCheckSum[arrayLength - 2] = Convert.ToByte(cs1, 16);
-                byteWithOutCheckSum[arrayLength - 1] = Convert.ToByte(cs2, 16);
-            }
-
-            // now the byte array is ready to be sent
-
-            List<byte> responseTelegram;
-            using (SerialPort port = new SerialPort(comPort, 115200, 0, 8, StopBits.One))
-            {
-                Thread.Sleep(500);
-                port.Open();
-                // write to the USB port
-                port.Write(byteWithOutCheckSum, 0, byteWithOutCheckSum.Length);
-                Thread.Sleep(500);
-
-                responseTelegram = new List<byte>();
-                int length = port.BytesToRead;
-                if (length > 0)
-                {
-                    byte[] message = new byte[length];
-                    port.Read(message, 0, length);
-                    foreach (var t in message)
-                    {
-                        Console.WriteLine(t);
-                        responseTelegram.Add(t);
-                    }
-                }
-                port.Close();
-                Thread.Sleep(500);
-            }
-
-            if (responseTelegram == null)
-            {
-                Console.WriteLine("No telegram was read");
-            }
-            else
-            {
-
-                string percentVoltString = responseTelegram[5].ToString("X") + responseTelegram[6].ToString("X");
-                percentVolt = Convert.ToInt32(percentVoltString, 16);
-
-
-            }
-            float nominalVoltage = 0;
-
-            // get nominal voltage
-            List<byte> response;
-            byte[] bytesToSend = { 0x74, 0x00, 0x02, 0x00, 0x76 };
-
-            using (SerialPort port = new SerialPort("COM7", 115200, 0, 8, StopBits.One))
-            {
-                Thread.Sleep(500);
-                port.Open();
-                port.Write(bytesToSend, 0, bytesToSend.Length);
-                Thread.Sleep(50);
-                response = new List<byte>();
-                int length = port.BytesToRead;
-                if (length > 0)
-                {
-                    byte[] message = new byte[length];
-                    port.Read(message, 0, length);
-                    foreach (var t in message)
-                    {
-                        response.Add(t);
-                    }
-                }
-                port.Close();
-                Thread.Sleep(500);
-            }
-            if (response == null)
-            {
-                Console.WriteLine("No telegram was read");
-            }
-            else
-            {
-                byte[] byteArray = { response[6], response[5], response[4], response[3] };
-                nominalVoltage = BitConverter.ToSingle(byteArray, 0);
-                volt = (double)percentVolt * nominalVoltage / 25600;
-                Console.WriteLine(string.Format("Voltage:{0}", volt));
-            }
-
-            return volt;
+            ApplicationConfiguration.Initialize();
+            Application.Run(new Form1(comPort, devType, serial, article, nomV, nomP, manuf, sw));
         }
 
-        static string getSerialNumber(string comPort)
+        // ===== Helper functions for binary protocol =====
+
+        private static List<byte> SendAndReceive(string comPort, byte[] telegram, int waitMs = 200)
         {
-            // reading serial number
-            List<byte> Serialresponse;
-            // Remember the dataframe setup, SD, DN,   OBJ, DATA checksum1, checksum2
-            // OBJ = 0x01 = 1
-            string serialNumberString = "";
-            byte[] serialBytesToSend = { 0x7F, 0x00, 0x01, 0x00, 0x80 };
-            using (SerialPort port = new SerialPort("COM7", 115200, 0, 8, StopBits.One))
+            List<byte> response = new();
+            using (SerialPort port = new SerialPort(comPort, 115200, Parity.None, 8, StopBits.One))
             {
-                Thread.Sleep(500);
+                Thread.Sleep(100);
                 port.Open();
-                // write to the USB port
-                port.Write(serialBytesToSend, 0, serialBytesToSend.Length);
-                Thread.Sleep(500);
-
-                Serialresponse = new List<byte>();
-                int length = port.BytesToRead;
-                if (length > 0)
-                {
-                    byte[] message = new byte[length];
-                    port.Read(message, 0, length);
-                    foreach (var t in message)
-                    {
-                        //Console.WriteLine(t);
-                        Serialresponse.Add(t);
-                    }
-                }
-                port.Close();
-                Thread.Sleep(500);
-
-                string binary = Convert.ToString(Serialresponse[0], 2);
-                string payloadLengtBinaryString = binary.Substring(4);
-                int payloadLength = Convert.ToInt32(payloadLengtBinaryString, 2);
-
-                if (Serialresponse[2] == 1) // means that I got a response on obj, which is refers to the object list.
-                {
-                    for (var i = 0; i < payloadLength; i++)
-                    {
-                        serialNumberString += Convert.ToChar(Serialresponse[3 + i]);
-                    }
-                }
-
-                Console.WriteLine(string.Format("serialNumberString:{0}", serialNumberString));
-
-            }
-
-            return serialNumberString;
-        }
-
-        static string getDeviceType(string comPort)
-        {
-            // reading device type
-            List<byte> deviceTypeResponse;
-            string deviceTypeString = "";
-            byte[] deviceTypeBytesToSend = { 0x7F, 0x00, 0x00, 0x00, 0x7F };
-            using (SerialPort port = new SerialPort("COM7", 115200, 0, 8, StopBits.One))
-            {
-                Thread.Sleep(500);
-                port.Open();
-                // write to the USB port
-                port.Write(deviceTypeBytesToSend, 0, deviceTypeBytesToSend.Length);
-                Thread.Sleep(500);
-
-                deviceTypeResponse = new List<byte>();
-                int length = port.BytesToRead;
-                if (length > 0)
-                {
-                    byte[] message = new byte[length];
-                    port.Read(message, 0, length);
-                    foreach (var t in message)
-                    {
-                        deviceTypeResponse.Add(t);
-                    }
-                }
-                port.Close();
-                Thread.Sleep(500);
-
-                string binary = Convert.ToString(deviceTypeResponse[0], 2);
-                string payloadLengtBinaryString = binary.Substring(4);
-                int payloadLength = Convert.ToInt32(payloadLengtBinaryString, 2);
-
-                if (deviceTypeResponse[2] == 2) // means that I got a response on obj, which is refers to the object list.
-                {
-                    for (var i = 0; i < payloadLength; i++)
-                    {
-                        deviceTypeString += Convert.ToChar(deviceTypeResponse[3 + i]);
-                    }
-                }
-
-                Console.WriteLine(string.Format("deviceTypeString:{0}", deviceTypeString));
-            }
-            return deviceTypeString;
-        }
-
-        static string getArticleNumber(string comPort)
-        {
-            byte SD = 0x7F;
-            byte DN = 0x00; // Output 1
-            byte OBJ = 0x06; // Device article no
-            byte CS = (byte)((SD + DN + OBJ + 0x00) & 0xFF);
-            byte[] telegram = { SD, DN, OBJ, 0x00, CS };
-
-            string articleNumberString = "";
-
-            using (SerialPort port = new SerialPort(comPort, 115200, 0, 8, StopBits.One))
-            {
-                Thread.Sleep(500);
-                port.Open();
-                // write to the USB port
                 port.Write(telegram, 0, telegram.Length);
-                Thread.Sleep(500);
-
-                // Read the response
-                List<byte> response = new List<byte>();
+                Thread.Sleep(waitMs);
                 int length = port.BytesToRead;
                 if (length > 0)
                 {
                     byte[] message = new byte[length];
                     port.Read(message, 0, length);
-                    foreach (var t in message)
-                    {
-                        response.Add(t);
-                    }
+                    response.AddRange(message);
                 }
                 port.Close();
-                Thread.Sleep(500);
-
-                // Process the response
-                if (response.Count > 0)
-                {
-                    for (int i = 0; i < response.Count; i++)
-                    {
-                        articleNumberString += Convert.ToChar(response[i]);
-                    }
-                }
             }
+            return response;
+        }
 
-            return articleNumberString;
+        private static string ReadString(string comPort, byte obj)
+        {
+            byte[] telegram = { 0x7F, 0x00, obj, 0x00, 0x00 };
+            telegram[4] = (byte)((telegram[0] + telegram[1] + telegram[2] + telegram[3]) & 0xFF);
+            var response = SendAndReceive(comPort, telegram);
+            if (response.Count < 4) return "";
+            int len = response[0] & 0x0F;
+            StringBuilder sb = new();
+            for (int i = 0; i < len; i++)
+            {
+                if (3 + i < response.Count && response[3 + i] != 0)
+                    sb.Append((char)response[3 + i]);
+            }
+            return sb.ToString();
+        }
+
+        private static float ReadFloat(string comPort, byte obj)
+        {
+            byte[] telegram = { 0x74, 0x00, obj, 0x00, 0x00 };
+            telegram[4] = (byte)((telegram[0] + telegram[1] + telegram[2] + telegram[3]) & 0xFF);
+            var response = SendAndReceive(comPort, telegram);
+            if (response.Count < 7) return float.NaN;
+            byte[] arr = { response[6], response[5], response[4], response[3] };
+            return BitConverter.ToSingle(arr, 0);
+        }
+
+        // === Public wrappers ===
+        public static double GetVoltage(string comPort)
+        {
+            byte[] telegram = { 0x74, 0x00, 0x47, 0x00, 0x00 };
+            telegram[4] = (byte)((telegram[0] + telegram[1] + telegram[2] + telegram[3]) & 0xFF);
+            var response = SendAndReceive(comPort, telegram);
+            if (response.Count < 7) return 0;
+            string hex = response[5].ToString("X2") + response[6].ToString("X2");
+            int percent = Convert.ToInt32(hex, 16);
+            float nomV = GetNominalVoltage(comPort);
+            return percent * nomV / 25600.0;
+        }
+
+        public static double GetCurrent(string comPort)
+        {
+            // TODO: implement parsing of actual current (OBJ 71 Word2).
+            return 0; 
+        }
+
+        public static double GetPower(string comPort)
+        {
+            double v = GetVoltage(comPort);
+            double i = GetCurrent(comPort);
+            return v * i;
+        }
+
+        public static string GetSerialNumber(string comPort) => ReadString(comPort, 0x01);
+        public static string GetDeviceType(string comPort) => ReadString(comPort, 0x00);
+        public static string GetArticleNumber(string comPort) => ReadString(comPort, 0x06);
+        public static string GetManufacturer(string comPort) => ReadString(comPort, 0x08);
+        public static string GetSoftwareVersion(string comPort) => ReadString(comPort, 0x09);
+
+        public static float GetNominalVoltage(string comPort) => ReadFloat(comPort, 0x02);
+        public static float GetNominalPower(string comPort) => ReadFloat(comPort, 0x04);
+
+        public static void SwitchRemote(string comPort, bool on)
+        {
+            byte[] telegram = { 0xF1, 0x00, 0x36, (byte)(on ? 0x10 : 0x00), 0x00, 0x00, 0x00 };
+            int sum = 0; foreach (var b in telegram) sum += b;
+            telegram[^2] = (byte)((sum >> 8) & 0xFF);
+            telegram[^1] = (byte)(sum & 0xFF);
+            SendAndReceive(comPort, telegram);
+        }
+
+        public static void SwitchOutput(string comPort, bool on)
+        {
+            byte[] telegram = { 0xF1, 0x00, 0x36, (byte)(on ? 0x01 : 0x00), 0x00, 0x00, 0x00 };
+            int sum = 0; foreach (var b in telegram) sum += b;
+            telegram[^2] = (byte)((sum >> 8) & 0xFF);
+            telegram[^1] = (byte)(sum & 0xFF);
+            SendAndReceive(comPort, telegram);
+        }
+
+        public static void SetVoltage(string comPort, float volt)
+        {
+            float nomV = GetNominalVoltage(comPort);
+            int percent = (int)Math.Round((25600 * volt) / nomV);
+            string hex = percent.ToString("X4");
+            byte hi = Convert.ToByte(hex.Substring(0, 2), 16);
+            byte lo = Convert.ToByte(hex.Substring(2, 2), 16);
+            byte[] telegram = { 0xF2, 0x00, 0x32, hi, lo, 0x00, 0x00 };
+            int sum = 0; foreach (var b in telegram) sum += b;
+            telegram[^2] = (byte)((sum >> 8) & 0xFF);
+            telegram[^1] = (byte)(sum & 0xFF);
+            SendAndReceive(comPort, telegram);
+        }
+
+        public static void SetPower(string comPort, float p)
+        {
+            double i = GetCurrent(comPort);
+            if (i <= 0) return;
+            float vTarget = (float)(p / i);
+            SetVoltage(comPort, vTarget);
         }
     }
 }
