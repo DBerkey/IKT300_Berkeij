@@ -103,28 +103,47 @@ namespace PS2000B
 
         public static void SwitchRemote(string comPort, bool on)
         {
-            byte[] telegram = { 0xF1, 0x00, 0x36, (byte)(on ? 0x10 : 0x00), 0x00, 0x00, 0x00 };
-            int sum = 0; foreach (var b in telegram) sum += b;
-            telegram[^2] = (byte)((sum >> 8) & 0xFF);
-            telegram[^1] = (byte)(sum & 0xFF);
-            SendAndReceive(comPort, telegram);
+            // Use the working telegram for enabling remote control
+            if (on)
+            {
+                byte[] rcTelegram = { 0xF1, 0x00, 0x36, 0x10, 0x10, 0x01, 0x47 };
+                SendAndReceive(comPort, rcTelegram, 100);
+            }
+            else
+            {
+                // Minimal telegram for disabling remote control: [SD, DN, OBJ, DATA, CS1, CS2]
+                byte[] telegram = { 0xF1, 0x00, 0x36, 0x10, 0x00, 0x00, 0x00 };
+                // Calculate checksum from first 4 bytes
+                int sum = telegram[0] + telegram[1] + telegram[2] + telegram[3] + telegram[4];
+                telegram[5] = (byte)((sum >> 8) & 0xFF); // High byte
+                telegram[6] = (byte)(sum & 0xFF);        // Low byte
+                SendAndReceive(comPort, telegram, 100);
+            }
         }
 
         public static void SwitchOutput(string comPort, bool on)
         {
-            byte[] telegram = { 0xF1, 0x00, 0x36, (byte)(on ? 0x01 : 0x00), 0x00, 0x00, 0x00 };
-            int sum = 0; foreach (var b in telegram) sum += b;
-            telegram[^2] = (byte)((sum >> 8) & 0xFF);
-            telegram[^1] = (byte)(sum & 0xFF);
-            SendAndReceive(comPort, telegram);
+            SwitchRemote(comPort, true); // Ensure remote control is enabled
+
+            byte[] telegram;
+            if (on)
+            {
+                telegram = new byte[] { 0xF1, 0x00, 0x36, 0x01, 0x01, 0x00, 0x00 };
+            }
+            else
+            {
+                telegram = new byte[] { 0xF1, 0x00, 0x36, 0x01, 0x00, 0x00, 0x00 };
+            }
+            int sum = telegram[0] + telegram[1] + telegram[2] + telegram[3] + telegram[4];
+            telegram[5] = (byte)((sum >> 8) & 0xFF); // High byte
+            telegram[6] = (byte)(sum & 0xFF);        // Low byte
+            SendAndReceive(comPort, telegram, 100);
         }
 
         public static void SetVoltage(string comPort, float volt)
         {
             // 1. Enable remote control
-            byte[] rcTelegram = { 0xF1, 0x00, 0x36, 0x10, 0x10, 0x01, 0x47 };
-            SendAndReceive(comPort, rcTelegram, 100);
-            Thread.Sleep(100);
+            SwitchRemote(comPort, true); // Ensure remote control is enabled
 
             // 2. Calculate percent value for voltage
             float nomV = GetNominalVoltage(comPort);

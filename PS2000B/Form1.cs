@@ -53,7 +53,16 @@ namespace PS2000B
                 if (float.TryParse(input, out float v)) Program.SetVoltage(comPort, v);
             };
 
-            panel.Controls.AddRange(new Control[] { btnShowV, btnSetV });
+            var btnOutOn = new Button { Text = "Output ON", AutoSize = true };
+            btnOutOn.Click += (s, e) => Program.SwitchOutput(comPort, true);
+            var btnOutOff = new Button { Text = "Output OFF", AutoSize = true };
+            btnOutOff.Click += (s, e) => Program.SwitchOutput(comPort, false);
+            var btnRemOn = new Button { Text = "Remote ON", AutoSize = true };
+            btnRemOn.Click += (s, e) => Program.SwitchRemote(comPort, true);
+            var btnRemOff = new Button { Text = "Remote OFF", AutoSize = true };
+            btnRemOff.Click += (s, e) => Program.SwitchRemote(comPort, false);
+
+            panel.Controls.AddRange(new Control[] { btnShowV, btnSetV, btnOutOn, btnOutOff, btnRemOn, btnRemOff });
             this.Controls.Add(panel);
         }
 
