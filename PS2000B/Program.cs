@@ -12,18 +12,17 @@ namespace PS2000B
         [STAThread]
         static void Main()
         {
-            string comPort = "COM7"; // adjust to your system
+            string comPort = "COM8"; // adjust to your system
 
             string devType = GetDeviceType(comPort);
             string serial = GetSerialNumber(comPort);
             string article = GetArticleNumber(comPort);
             float nomV = GetNominalVoltage(comPort);
-            float nomP = GetNominalPower(comPort);
             string manuf = GetManufacturer(comPort);
             string sw = GetSoftwareVersion(comPort);
 
             ApplicationConfiguration.Initialize();
-            Application.Run(new Form1(comPort, devType, serial, article, nomV, nomP, manuf, sw));
+            Application.Run(new Form1(comPort, devType, serial, article, nomV, manuf, sw));
         }
 
         // ===== Helper functions for binary protocol =====
@@ -94,13 +93,6 @@ namespace PS2000B
             return 0; 
         }
 
-        public static double GetPower(string comPort)
-        {
-            double v = GetVoltage(comPort);
-            double i = GetCurrent(comPort);
-            return v * i;
-        }
-
         public static string GetSerialNumber(string comPort) => ReadString(comPort, 0x01);
         public static string GetDeviceType(string comPort) => ReadString(comPort, 0x00);
         public static string GetArticleNumber(string comPort) => ReadString(comPort, 0x06);
@@ -108,7 +100,6 @@ namespace PS2000B
         public static string GetSoftwareVersion(string comPort) => ReadString(comPort, 0x09);
 
         public static float GetNominalVoltage(string comPort) => ReadFloat(comPort, 0x02);
-        public static float GetNominalPower(string comPort) => ReadFloat(comPort, 0x04);
 
         public static void SwitchRemote(string comPort, bool on)
         {
@@ -130,24 +121,75 @@ namespace PS2000B
 
         public static void SetVoltage(string comPort, float volt)
         {
-            float nomV = GetNominalVoltage(comPort);
-            int percent = (int)Math.Round((25600 * volt) / nomV);
-            string hex = percent.ToString("X4");
-            byte hi = Convert.ToByte(hex.Substring(0, 2), 16);
-            byte lo = Convert.ToByte(hex.Substring(2, 2), 16);
-            byte[] telegram = { 0xF2, 0x00, 0x32, hi, lo, 0x00, 0x00 };
-            int sum = 0; foreach (var b in telegram) sum += b;
-            telegram[^2] = (byte)((sum >> 8) & 0xFF);
-            telegram[^1] = (byte)(sum & 0xFF);
-            SendAndReceive(comPort, telegram);
-        }
+            // 1. Enable remote control
+            byte[] rcTelegram = { 0xF1, 0x00, 0x36, 0x10, 0x10, 0x01, 0x47 };
+            SendAndReceive(comPort, rcTelegram, 100);
+            Thread.Sleep(100);
 
-        public static void SetPower(string comPort, float p)
-        {
-            double i = GetCurrent(comPort);
-            if (i <= 0) return;
-            float vTarget = (float)(p / i);
-            SetVoltage(comPort, vTarget);
+            // 2. Calculate percent value for voltage
+            float nomV = GetNominalVoltage(comPort);
+            int percentSetValue = (int)Math.Round((25600 * volt) / nomV);
+            string hexValue = percentSetValue.ToString("X");
+            string hexValue1 = "";
+            string hexValue2 = "";
+            if (hexValue.Length == 4)
+            {
+                hexValue1 = hexValue.Substring(0, 2);
+                hexValue2 = hexValue.Substring(2, 2);
+            }
+            else if (hexValue.Length == 3)
+            {
+                hexValue1 = hexValue.Substring(0, 1);
+                hexValue2 = hexValue.Substring(1);
+            }
+            else if (hexValue.Length == 2 || hexValue.Length == 1)
+            {
+                hexValue1 = "0";
+                hexValue2 = hexValue;
+            }
+
+            byte[] telegram = { 0xF2, 0x00, 0x32, Convert.ToByte(hexValue1, 16), Convert.ToByte(hexValue2, 16), 0x00, 0x00 };
+            int sum = 0;
+            foreach (var b in telegram) sum += b;
+            string hexSum = sum.ToString("X");
+            string cs1 = "";
+            string cs2 = "";
+            if (hexSum.Length == 4)
+            {
+                cs1 = hexSum.Substring(0, 2);
+                cs2 = hexSum.Substring(2, 2);
+            }
+            else if (hexSum.Length == 3)
+            {
+                cs1 = hexSum.Substring(0, 1);
+                cs2 = hexSum.Substring(1);
+            }
+            else if (hexSum.Length == 2 || hexSum.Length == 1)
+            {
+                cs1 = "0";
+                cs2 = hexSum;
+            }
+            if (cs1 != "")
+            {
+                telegram[telegram.Length - 2] = Convert.ToByte(cs1, 16);
+                telegram[telegram.Length - 1] = Convert.ToByte(cs2, 16);
+            }
+
+            // 3. Send voltage telegram and check response
+            var response = SendAndReceive(comPort, telegram, 500);
+            Thread.Sleep(100);
+            if (response.Count > 3 && response[3] == 0)
+            {
+                Console.WriteLine("New voltage was set");
+            }
+            else if (response.Count > 3)
+            {
+                Console.WriteLine($"Voltage not set, error: {response[3]}");
+            }
+            else
+            {
+                Console.WriteLine("No response or unexpected response when setting voltage.");
+            }
         }
     }
 }
