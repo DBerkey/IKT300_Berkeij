@@ -5,21 +5,29 @@ namespace PS2000B
 {
     public partial class Form1 : Form
     {
-        private string comPort;
-        private Label lblDevType, lblSerial, lblArticle, lblNomV, lblManufacturer, lblSW, lblVoltage, lblSerialCheck;
-        private TextBox txtSerialBack;
+    private string comPort;
+    private Label lblDevType = new Label();
+    private Label lblSerial = new Label();
+    private Label lblArticle = new Label();
+    private Label lblNomV = new Label();
+    private Label lblManufacturer = new Label();
+    private Label lblSW = new Label();
+    private Label lblVoltage = new Label();
+    private Label lblSerialCheck = new Label();
+    private TextBox txtSerialBack = new TextBox();
 
         public Form1(string comPort, string devType, string serial, string article,
                      float nomV, string manuf, string sw)
         {
             this.comPort = comPort;
             InitializeComponent();
-            lblDevType.Text = devType;
-            lblSerial.Text = serial;
-            lblArticle.Text = article;
+            // Ensure labels are not null before setting text
+            lblDevType.Text = devType ?? "-";
+            lblSerial.Text = serial ?? "-";
+            lblArticle.Text = article ?? "-";
             lblNomV.Text = $"{nomV:F1} V";
-            lblManufacturer.Text = manuf;
-            lblSW.Text = sw;
+            lblManufacturer.Text = manuf ?? "-";
+            lblSW.Text = sw ?? "-";
         }
 
         private void InitializeComponent()
