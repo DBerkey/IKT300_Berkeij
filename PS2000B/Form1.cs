@@ -5,26 +5,27 @@ namespace PS2000B
 {
     public partial class Form1 : Form
     {
-    private string comPort;
-    private Label lblDevType = new Label();
-    private Label lblSerial = new Label();
-    private Label lblArticle = new Label();
-    private Label lblNomV = new Label();
-    private Label lblManufacturer = new Label();
-    private Label lblSW = new Label();
-    private Label lblVoltage = new Label();
-    private Label lblSerialCheck = new Label();
-    private TextBox txtSerialBack = new TextBox();
+        private string comPort;
+        private PSUBuisnesLogic.IPCUUtil psu;
+        private Label lblDevType = new Label();
+        private Label lblSerial = new Label();
+        private Label lblItem = new Label();
+        private Label lblNomV = new Label();
+        private Label lblManufacturer = new Label();
+        private Label lblSW = new Label();
+        private Label lblVoltage = new Label();
+        private Label lblSerialCheck = new Label();
+        private TextBox txtSerialBack = new TextBox();
 
-        public Form1(string comPort, string devType, string serial, string article,
-                     float nomV, string manuf, string sw)
+        public Form1(string comPort, string devType, string serial, string Item,
+                     float nomV, string manuf, string sw, PSUBuisnesLogic.IPCUUtil psu)
         {
             this.comPort = comPort;
+            this.psu = psu;
             InitializeComponent();
-            // Ensure labels are not null before setting text
             lblDevType.Text = devType ?? "-";
             lblSerial.Text = serial ?? "-";
-            lblArticle.Text = article ?? "-";
+            lblItem.Text = Item ?? "-";
             lblNomV.Text = $"{nomV:F1} V";
             lblManufacturer.Text = manuf ?? "-";
             lblSW.Text = sw ?? "-";
@@ -38,7 +39,7 @@ namespace PS2000B
             var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true };
             lblDevType = AddRow(panel, "Device Type:");
             lblSerial = AddRow(panel, "Serial:");
-            lblArticle = AddRow(panel, "Article:");
+            lblItem = AddRow(panel, "Item:");
             lblNomV = AddRow(panel, "Nominal Voltage:");
             lblManufacturer = AddRow(panel, "Manufacturer:");
             lblSW = AddRow(panel, "SW Version:");
@@ -53,22 +54,22 @@ namespace PS2000B
             panel.SetFlowBreak(lblSerialCheck, true);
 
             var btnShowV = new Button { Text = "Show Voltage", AutoSize = true };
-            btnShowV.Click += (s, e) => lblVoltage.Text = $"{Program.GetVoltage(comPort):F2} V";
+            btnShowV.Click += (s, e) => lblVoltage.Text = $"{psu.GetVoltage(comPort):F2} V";
             var btnSetV = new Button { Text = "Set Voltage", AutoSize = true };
             btnSetV.Click += (s, e) =>
             {
                 string input = Microsoft.VisualBasic.Interaction.InputBox("Enter voltage (V):");
-                if (float.TryParse(input, out float v)) Program.SetVoltage(comPort, v);
+                if (float.TryParse(input, out float v)) psu.SetVoltage(comPort, v);
             };
 
             var btnOutOn = new Button { Text = "Output ON", AutoSize = true };
-            btnOutOn.Click += (s, e) => Program.SwitchOutput(comPort, true);
+            btnOutOn.Click += (s, e) => psu.SwitchOutput(comPort, true);
             var btnOutOff = new Button { Text = "Output OFF", AutoSize = true };
-            btnOutOff.Click += (s, e) => Program.SwitchOutput(comPort, false);
+            btnOutOff.Click += (s, e) => psu.SwitchOutput(comPort, false);
             var btnRemOn = new Button { Text = "Remote ON", AutoSize = true };
-            btnRemOn.Click += (s, e) => Program.SwitchRemote(comPort, true);
+            btnRemOn.Click += (s, e) => psu.SwitchRemote(comPort, true);
             var btnRemOff = new Button { Text = "Remote OFF", AutoSize = true };
-            btnRemOff.Click += (s, e) => Program.SwitchRemote(comPort, false);
+            btnRemOff.Click += (s, e) => psu.SwitchRemote(comPort, false);
 
             panel.Controls.AddRange(new Control[] { btnShowV, btnSetV, btnOutOn, btnOutOff, btnRemOn, btnRemOff });
             this.Controls.Add(panel);
@@ -92,6 +93,11 @@ namespace PS2000B
             p.Controls.Add(val);
             p.SetFlowBreak(val, true);
             return val;
+        }
+        
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            Application.Exit();
         }
     }
 }
