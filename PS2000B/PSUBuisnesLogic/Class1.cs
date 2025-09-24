@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace PSUBuisnesLogic
 {
-    public interface IPCUUtil
+    internal interface IPCUUtil
     {
         string GetDeviceType(string comPort);
         string GetSerialNumber(string comPort);
@@ -21,7 +21,7 @@ namespace PSUBuisnesLogic
         void SwitchRemote(string comPort, bool on);
     }
 
-    public class PS2000BPowerSupply : IPCUUtil
+    internal class PS2000BPowerSupply : IPCUUtil
     {
         public class SerialPortNotFoundException : Exception
         {
@@ -206,7 +206,7 @@ namespace PSUBuisnesLogic
         }
     }
 
-    public class DummyPowerSupply : IPCUUtil
+    internal class DummyPowerSupply : IPCUUtil
     {
         private double _currentVoltage = 12.34; // Default voltage
 
@@ -233,7 +233,7 @@ namespace PSUBuisnesLogic
         }
     }
 
-    public static class PowerSupplyFactory
+    internal static class PowerSupplyFactory
     {
         public static IPCUUtil Create(int Version)
         {

@@ -18,7 +18,7 @@ namespace PS2000B
         private Label lblSerialCheck = new Label();
         private TextBox txtSerialBack = new TextBox();
 
-        public Form1(string comPort, string devType, string serial, string Item,
+        internal Form1(string comPort, string devType, string serial, string Item,
                      float nomV, string manuf, string sw, PSUBuisnesLogic.IPCUUtil psu)
         {
             this.comPort = comPort;
