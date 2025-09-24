@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using System.IO.Ports;
 
 namespace PS2000B
 {
@@ -54,25 +55,77 @@ namespace PS2000B
             panel.SetFlowBreak(lblSerialCheck, true);
 
             var btnShowV = new Button { Text = "Show Voltage", AutoSize = true };
-            btnShowV.Click += (s, e) => lblVoltage.Text = $"{psu.GetVoltage(comPort):F2} V";
+            btnShowV.Click += (s, e) =>
+            {
+                if (CheckComport(comPort) == 0)
+                {
+                    lblVoltage.Text = $"{psu.GetVoltage(comPort):F2} V";
+                }
+            };
             var btnSetV = new Button { Text = "Set Voltage", AutoSize = true };
             btnSetV.Click += (s, e) =>
             {
-                string input = Microsoft.VisualBasic.Interaction.InputBox("Enter voltage (V):");
-                if (float.TryParse(input, out float v)) psu.SetVoltage(comPort, v);
+                if (CheckComport(comPort) == 0)
+                {
+                    string input = Microsoft.VisualBasic.Interaction.InputBox("Enter voltage (V):");
+                    if (float.TryParse(input, out float v)) psu.SetVoltage(comPort, v);
+                }
             };
 
             var btnOutOn = new Button { Text = "Output ON", AutoSize = true };
-            btnOutOn.Click += (s, e) => psu.SwitchOutput(comPort, true);
+            btnOutOn.Click += (s, e) =>
+            {
+                if (CheckComport(comPort) == 0) psu.SwitchOutput(comPort, true);
+            };
             var btnOutOff = new Button { Text = "Output OFF", AutoSize = true };
-            btnOutOff.Click += (s, e) => psu.SwitchOutput(comPort, false);
+            btnOutOff.Click += (s, e) =>
+            {
+                if (CheckComport(comPort) == 0) psu.SwitchOutput(comPort, false);
+            };
             var btnRemOn = new Button { Text = "Remote ON", AutoSize = true };
-            btnRemOn.Click += (s, e) => psu.SwitchRemote(comPort, true);
+            btnRemOn.Click += (s, e) =>
+            {
+                if (CheckComport(comPort) == 0) psu.SwitchRemote(comPort, true);
+            };
             var btnRemOff = new Button { Text = "Remote OFF", AutoSize = true };
-            btnRemOff.Click += (s, e) => psu.SwitchRemote(comPort, false);
+            btnRemOff.Click += (s, e) =>
+            {
+                if (CheckComport(comPort) == 0) psu.SwitchRemote(comPort, false);
+            };
 
             panel.Controls.AddRange(new Control[] { btnShowV, btnSetV, btnOutOn, btnOutOff, btnRemOn, btnRemOff });
             this.Controls.Add(panel);
+        }
+
+        private double CheckComport(string comPort)
+        {
+            try
+            {
+                string[] availablePorts = SerialPort.GetPortNames();
+                if (Array.Exists(availablePorts, p => p.Equals(comPort, StringComparison.OrdinalIgnoreCase)))
+                {
+                    using (var port = new SerialPort(comPort, 9600, Parity.None, 8, StopBits.One))
+                    {
+                        port.ReadTimeout = 1000;
+                        port.WriteTimeout = 1000;
+                        port.Open();
+                        port.DiscardInBuffer();
+                        port.DiscardOutBuffer();
+                        byte[] command = new byte[] { 0x01, 0x09 };
+                    }
+                }
+                else
+                {
+                    MessageBox.Show($"COM port {comPort} not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return -1;
+                }
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error accessing COM port {comPort}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return -1;
+            }
         }
 
         private void CheckSerialMatch()

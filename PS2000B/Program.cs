@@ -9,9 +9,6 @@ namespace PS2000B
         [STAThread]
         static void Main()
         {
-            IPCUUtil psu = PowerSupplyFactory.Create();
-
-
             ApplicationConfiguration.Initialize();
             Application.Run(new Form2());
         }

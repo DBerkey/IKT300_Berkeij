@@ -206,11 +206,46 @@ namespace PSUBuisnesLogic
         }
     }
 
+    public class DummyPowerSupply : IPCUUtil
+    {
+        private double _currentVoltage = 12.34; // Default voltage
+
+        public string GetDeviceType(string comPort) => "Dummy Device";
+        public string GetSerialNumber(string comPort) => "DUMMY12345";
+        public string GetItemNumber(string comPort) => "ITEM0001";
+        public string GetManufacturer(string comPort) => "Dummy Manufacturer";
+        public string GetSWVersion(string comPort) => "1.0.0";
+        public float GetNominalVoltage(string comPort) => 30.0f;
+        public double GetVoltage(string comPort) => _currentVoltage;
+        public void SetVoltage(string comPort, float volt)
+        {
+            _currentVoltage = volt;
+        }
+        public void SwitchOutput(string comPort, bool on)
+        {
+            // Simulate switching output
+            Console.WriteLine(on ? "Output switched ON" : "Output switched OFF");
+        }
+        public void SwitchRemote(string comPort, bool on)
+        { 
+            // Simulate switching remote
+            Console.WriteLine(on ? "Remote mode ON" : "Remote mode OFF");
+        }
+    }
+
     public static class PowerSupplyFactory
     {
-        public static IPCUUtil Create()
+        public static IPCUUtil Create(int Version)
         {
-            return new PS2000BPowerSupply();
+            switch (Version)
+            {
+                case 2000:
+                    return new PS2000BPowerSupply();
+                case -1:
+                    return new DummyPowerSupply();
+                default:
+                    throw new NotSupportedException($"Power supply version {Version} is not supported.");
+            }
         }
     }
 }
